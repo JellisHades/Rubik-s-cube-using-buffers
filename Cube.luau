@@ -93,7 +93,7 @@ function Module.RotateFace(Cube, Side, Size, Clockwise)
 	end
 end
 
-Module[1] = function(Offset, Side, Level, CubeSize)
+Module[1] = function(Offset, Side, Level, CubeSize) -- side vertical
 	local Sideway = Side == 0 or Side == 5
 
 	CubeSize -= 1
@@ -105,14 +105,14 @@ Module[1] = function(Offset, Side, Level, CubeSize)
 		Sideway and Level or Offset
 end
 
-Module[2] = function(Offset, Side, Level, CubeSize)
+Module[2] = function(Offset, Side, Level, CubeSize) -- vertical
 	CubeSize -= 1
 
 	return Side == 4 and CubeSize - Level or Level,
 		Side == 4 and CubeSize - Offset or Offset
 end
 
-Module[3] = function(Offset, Side, Level, CubeSize)
+Module[3] = function(Offset, Side, Level, CubeSize) -- horizontal
 	return Offset, Level
 end
 
@@ -183,7 +183,9 @@ function Module.MoveCube(Cube: buffer, Side: number, Level: number, Sideway: boo
 end
 
 
-function Module.SetNewMiddle(Cube, Side)
+function Module.SetNewMiddle(Cube, Side, Direction)
+	Direction = Direction or 1
+	
 	local CubeSize = GetCubeSize(Cube)
 	local MovedCube = CopyBuffer(Cube)
 
@@ -193,15 +195,15 @@ function Module.SetNewMiddle(Cube, Side)
 	
 	for Level=0, CubeSize - 1 do
 		if Side == 0 then
-			MovedCube = Module.MoveCube(MovedCube, 0, Level, false, -1)
+			MovedCube = Module.MoveCube(MovedCube, 0, Level, false, -1 * Direction)
 		elseif Side == 1 then
-			MovedCube = Module.MoveCube(MovedCube, 1, Level, true, 1)
+			MovedCube = Module.MoveCube(MovedCube, 1, Level, true, 1 * Direction)
 		elseif Side == 3 then
-			MovedCube = Module.MoveCube(MovedCube, 1, Level, true, -1)
+			MovedCube = Module.MoveCube(MovedCube, 1, Level, true, -1 * Direction)
 		elseif Side == 4 then
-			MovedCube = Module.MoveCube(MovedCube, 1, Level, true, -2)
+			MovedCube = Module.MoveCube(MovedCube, 1, Level, true, -2 * Direction)
 		elseif Side == 5 then
-			MovedCube = Module.MoveCube(MovedCube, 0, Level, false, 1)
+			MovedCube = Module.MoveCube(MovedCube, 0, Level, false, 1 * Direction)
 		end
 	end
 
@@ -212,14 +214,6 @@ function Module.DoNotation(Cube: buffer, Notation:
 	"U" | "D" | "R" | "L" | "F" | "B" | 
 	"U'" | "D'" | "R'" | "L'" | "F'" | "B'" | 
 	string)
-
-	if Notation == "x" then
-		return Module.SetNewMiddle(Cube, 5)
-	elseif Notation == "y" then
-		return Module.SetNewMiddle(Cube, 3)
-	elseif Notation == "z" then
-		return Module.SetNewMiddle(Cube, 1)
-	end
 	
 	local Side, Level, Sideway, Direction
 	
@@ -257,12 +251,20 @@ function Module.DoNotation(Cube: buffer, Notation:
 		Side, Level, Sideway, Direction = 1, Edge, false, 1 * Direction
 	elseif Notation == "B" then
 		Side, Level, Sideway, Direction = 1, 0, false, -1 * Direction
-	else
+	elseif Notation ~= "x" or Notation ~= "y" or Notation ~= "z" then
 		error(`{Notation} is not a thing yet`)
 	end
 	
 	if Reverse then
 		Direction = -Direction
+	end
+
+	if Notation == "x" then
+		return Module.SetNewMiddle(Cube, 5, Direction)
+	elseif Notation == "y" then
+		return Module.SetNewMiddle(Cube, 3, Direction)
+	elseif Notation == "z" then
+		return Module.SetNewMiddle(Cube, 1, Direction)
 	end
 	
 	local MovedCube = Module.MoveCube(Cube, Side, Level, Sideway, Direction)
