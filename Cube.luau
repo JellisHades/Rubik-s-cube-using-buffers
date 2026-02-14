@@ -6,6 +6,9 @@ local Horizontal = {1, 2, 3, 4}
 
 local FacesValue = {"W", "O", "G", "R", "B", "Y"} 
 
+local Write = buffer.writei8
+local Read = buffer.readi8
+
 local function CopyBuffer(Buffer)
 	local BufferSize = buffer.len(Buffer)
 
@@ -23,17 +26,20 @@ local function GetOffset(Size, Face, X, Y)
 	return Face * Size ^ 2 + Y * Size + X
 end
 
-function Module.CubeToString(Cube: buffer)
+Module.GetOffset = GetOffset
+Module.GetCubeSize = GetCubeSize
+
+function Module.CubeToString(Cube: buffer, ToLetters: boolean)
 	local String = ""
 
 	for Offset=0, buffer.len(Cube) - 1 do
-		String ..= FacesValue[buffer.readi8(Cube, Offset) + 1]
+		String ..= ToLetters and FacesValue[Read(Cube, Offset) + 1] or Offset
 	end
 
 	return String
 end
 
-function Module.PrintCube(Cube: buffer)
+function Module.PrintCube(Cube: buffer, ToLetters: boolean)
 	local CubeSize = GetCubeSize(Cube)
 	local FaceSize = CubeSize ^ 2
 	
@@ -56,12 +62,12 @@ function Module.PrintCube(Cube: buffer)
 			String ..= "\n"
 		end 
 		
-		local Value = buffer.readi8(
+		local Value = Read(
 			Cube,
 			GetOffset(CubeSize, Side, X, Y)
 		)
 		
-		String ..= FacesValue[Value + 1] .. " "
+		String ..= (ToLetters and FacesValue[Value + 1] or Value) .. " "
 	end
 	
 	print(String)
@@ -82,7 +88,7 @@ function Module.RotateFace(Cube, Side, Size, Clockwise)
 				((Column * PieceSize) - Row) or
 				((PieceSize - Column) * PieceSize + Row) - 1)
 			
-			buffer.writei8(Cube, NewPos, buffer.readi8(FaceCopy, OldPos))
+			Write(Cube, NewPos, Read(FaceCopy, OldPos))
 		end
 	end
 end
@@ -110,7 +116,7 @@ Module[3] = function(Offset, Side, Level, CubeSize)
 	return Offset, Level
 end
 
-function Module.MoveCube(Cube: buffer, Side: number, Level: number, Sideway: boolean, Direction: IntValue)
+function Module.MoveCube(Cube: buffer, Side: number, Level: number, Sideway: boolean, Direction: number)
 	local MovedCube = CopyBuffer(Cube)
 	local CubeSize = GetCubeSize(Cube)
 
@@ -169,7 +175,33 @@ function Module.MoveCube(Cube: buffer, Side: number, Level: number, Sideway: boo
 				Module[StripCalculation](Offset, NeighborFace, Level, CubeSize)
 			)
 
-			buffer.writei8(MovedCube, NewPos, buffer.readi8(Cube, OldPos))
+			Write(MovedCube, NewPos, Read(Cube, OldPos))
+		end
+	end
+
+	return MovedCube
+end
+
+
+function Module.SetNewMiddle(Cube, Side)
+	local CubeSize = GetCubeSize(Cube)
+	local MovedCube = CopyBuffer(Cube)
+
+	if Side == 2 then
+		return MovedCube
+	end
+	
+	for Level=0, CubeSize - 1 do
+		if Side == 0 then
+			MovedCube = Module.MoveCube(MovedCube, 0, Level, false, -1)
+		elseif Side == 1 then
+			MovedCube = Module.MoveCube(MovedCube, 1, Level, true, 1)
+		elseif Side == 3 then
+			MovedCube = Module.MoveCube(MovedCube, 1, Level, true, -1)
+		elseif Side == 4 then
+			MovedCube = Module.MoveCube(MovedCube, 1, Level, true, -2)
+		elseif Side == 5 then
+			MovedCube = Module.MoveCube(MovedCube, 0, Level, false, 1)
 		end
 	end
 
@@ -180,6 +212,14 @@ function Module.DoNotation(Cube: buffer, Notation:
 	"U" | "D" | "R" | "L" | "F" | "B" | 
 	"U'" | "D'" | "R'" | "L'" | "F'" | "B'" | 
 	string)
+
+	if Notation == "x" then
+		return Module.SetNewMiddle(Cube, 5)
+	elseif Notation == "y" then
+		return Module.SetNewMiddle(Cube, 3)
+	elseif Notation == "z" then
+		return Module.SetNewMiddle(Cube, 1)
+	end
 	
 	local Side, Level, Sideway, Direction
 	
@@ -188,22 +228,35 @@ function Module.DoNotation(Cube: buffer, Notation:
 	local CubeSize = GetCubeSize(Cube)
 	local Edge = CubeSize - 1
 	
+	local Double = false
+	
+	if string.lower(Notation) == Notation then
+		Double = true
+		Notation = string.upper(Notation)
+	end
+	
+	Direction = tonumber(string.sub(Notation, 2, 2)) or 1
+	
+	if Direction > 1 then
+		Notation = string.sub(Notation, 1, 1)
+	end
+
 	if Reverse then
 		Notation = string.sub(Notation, 1, #Notation - 1)
 	end
-
+	
 	if Notation == "U" then
-		Side, Level, Sideway, Direction = 1, 0, true, -1
+		Side, Level, Sideway, Direction = 1, 0, true, -1 * Direction
 	elseif Notation == "D" then
-		Side, Level, Sideway, Direction = 1, Edge, true, 1
+		Side, Level, Sideway, Direction = 1, Edge, true, 1 * Direction
 	elseif Notation == "R" then
-		Side, Level, Sideway, Direction = 2, Edge, false, 1
+		Side, Level, Sideway, Direction = 2, Edge, false, 1 * Direction
 	elseif Notation == "L" then
-		Side, Level, Sideway, Direction = 2, 0, false, -1
+		Side, Level, Sideway, Direction = 2, 0, false, -1 * Direction
 	elseif Notation == "F" then
-		Side, Level, Sideway, Direction = 1, Edge, false, 1
+		Side, Level, Sideway, Direction = 1, Edge, false, 1 * Direction
 	elseif Notation == "B" then
-		Side, Level, Sideway, Direction = 1, 0, false, -1
+		Side, Level, Sideway, Direction = 1, 0, false, -1 * Direction
 	else
 		error(`{Notation} is not a thing yet`)
 	end
@@ -212,7 +265,19 @@ function Module.DoNotation(Cube: buffer, Notation:
 		Direction = -Direction
 	end
 	
-	return Module.MoveCube(Cube, Side, Level, Sideway, Direction)
+	local MovedCube = Module.MoveCube(Cube, Side, Level, Sideway, Direction)
+	
+	if Double then
+		if Level == 0 then
+			Level += 1
+		elseif Level == Edge then
+			Level -= 1
+		end
+		
+		MovedCube = Module.MoveCube(Cube, Side, Level, Sideway, Direction)
+	end
+		
+	return MovedCube
 end
 
 function Module.CreateCube(Size: number, State: string?)
@@ -223,7 +288,7 @@ function Module.CreateCube(Size: number, State: string?)
 			local Offset = (Side * Size ^ 2) + (Offset - 1)
 			local StateColor = State and string.sub(State, Offset + 1, Offset + 1)
 			
-			buffer.writei8(
+			Write(
 				Cube, 
 				Offset, 
 				State and table.find(FacesValue, StateColor) - 1 or Side
